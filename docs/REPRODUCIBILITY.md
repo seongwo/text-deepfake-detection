@@ -1,6 +1,6 @@
 # Implementation and reproducibility notes
 
-This is a portfolio fork of the [team repository](https://github.com/jiwoong218/text-deepfake-detection). The competition outcome and combined pipeline are team achievements. A component-level account of Seongwoo Lim's individual contribution has not yet been documented here.
+This is a portfolio fork of the [team repository](https://github.com/jiwoong218/text-deepfake-detection). The competition outcome and combined pipeline are team achievements. A component-level account of Seong-U IM's individual contribution has not yet been documented here.
 
 ## What the checked-in code supports
 
