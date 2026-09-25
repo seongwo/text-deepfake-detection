@@ -1,141 +1,59 @@
+# 한국어 AI 생성 텍스트 탐지
 
+2025 SW중심대학 디지털 경진대회 AI 부문 — **279팀 중 7위, 후원기업상**.
 
-# AI 생성 텍스트 탐지 프로젝트
+[팀 저장소](https://github.com/jiwoong218/text-deepfake-detection)를 fork한 저장소입니다. 한국어 텍스트가 사람이 작성한 것인지 AI가 생성한 것인지 구분하는 문제를 다뤘습니다. 클래스 불균형, 긴 문서, 불확실한 라벨에 대응하는 방법을 조합했습니다. 전체 파이프라인과 대회 성과는 팀의 결과입니다.
 
+[English](README.md)
 
-## 포트폴리오 맥락과 현재 상태
+## 방법
 
-이 저장소는 [팀 프로젝트](https://github.com/jiwoong218/text-deepfake-detection)의 Seongwoo Lim 개인 fork입니다. 포트폴리오 소유자가 제공한 이력에 따르면 **2025 SW중심대학 디지털 경진대회 AI 부문 279팀 중 7위, 후원기업상**을 수상했습니다. 전체 방법과 성과는 팀의 결과이며 개인의 단독 기여로 표기하지 않습니다.
+| 문제 | 현재 코드에서 확인되는 구성 |
+| --- | --- |
+| 텍스트 분류 | KoELECTRA |
+| 샘플별 난이도 차이 | Hard-first loss weighting |
+| 클래스 불균형 | 클래스별 subsampling |
+| 긴 입력 | 겹치는 window별 추론과 최대 확률 집계 |
+| 여러 모델의 예측 결합 | 예측 확률 평균 |
 
-실제 구현과 기법의 대응, 데이터·체크포인트 제공 범위, 실행을 막는 문제는 [재현성 문서](docs/REPRODUCIBILITY.md)에 정리했습니다. 아래 명령은 기존 워크플로를 설명하며, 현재 전처리/학습 인터페이스와 추론 제약을 해결하기 전에는 전체 재현이 검증되었다고 볼 수 없습니다.
+각 구성의 코드 위치와 실험 기록의 범위는 [구현·재현성 문서](docs/REPRODUCIBILITY.md)에 정리했습니다. 개인별 세부 구현 기여는 아직 문서화하지 않았습니다.
 
-이 프로젝트는 주어진 텍스트가 AI에 의해 생성되었는지, 아니면 사람이 작성했는지를 탐지하는 것을 목표로 합니다. 분류를 위해 Ko-ELECTRA 모델을 사용합니다.
+## 코드 구성
 
-## 프로젝트 구조
+- `src/data_preparation.py`: 문단 전처리, 데이터 분할, tokenization
+- `src/train.py`: 학습 루프와 클래스별 sampler
+- `src/modeling.py`, `src/superloss.py`: KoELECTRA loss wrapper와 loss weighting
+- `src/electra.py`, `src/train_9000.py`, `src/train_super_ada.py`: 개별 실험 학습 스크립트
+- `src/inference.py`: 기본 추론 및 overlapping-window 추론
+- `src/ensemble.py`: 제출 CSV의 확률 평균
+- `notebooks/3rd super_Ada.ipynb`: 원래 실험 노트북
 
-```
-├───data/
-│   ├───sample_submission.csv
-│   ├───test.csv
-│   └───train.csv
-├───models/
-│   ├───best_Ada_model/
-│   ├───best_extra_model/
-│   ├───koelectra_42_4000_model/
-│   └───koelectra_9000_model/
-├───notebooks/
-│   └───3rd super_Ada.ipynb
-├───processed_data/
-│   ├───test_ds/
-│   └───train_ds/
-├───src/
-│   ├───data_preparation.py
-│   ├───electra.py
-│   ├───ensemble.py
-│   ├───inference.py
-│   ├───modeling.py
-│   ├───superloss.py
-│   ├───train.py
-│   ├───train_9000.py
-│   └───train_super_ada.py
-├───.python-version
-├───ko_README.md
-├───README.md
-└───requirements.txt
-```
+대회 데이터, 전처리 데이터, 모델 가중치는 포함하지 않았습니다. `models/` 아래 폴더에는 빈 자리 표시 파일만 있습니다.
 
-- **`data/`**: 원본 데이터 파일(`train.csv`, `test.csv`, `sample_submission.csv`)이 들어있습니다.
-- **`models/`**: 학습된 로컬 모델 체크포인트를 저장합니다. 사전 학습된 모델들은 허깅페이스(Hugging Face)에 업로드되어 있습니다: `218jw/best_Ada_model`, `218jw/best_extra_model`, `218jw/koelectra_42_4000_model`, `218jw/koelectra_9000_model`.
-- **`notebooks/`**: 실험에 사용된 주피터 노트북이 들어있습니다.
-- **`processed_data/`**: 전처리 및 토큰화된 데이터셋을 저장합니다.
-- **`src/`**: 모든 소스 코드가 들어있습니다.
-  - `data_preparation.py`: 원본 데이터를 전처리하고 토큰화하는 스크립트입니다.
-  - `electra.py`: 토큰 길이 필터링을 포함한 Ko-ELECTRA 모델의 특정 학습 스크립트입니다.
-  - `ensemble.py`: 여러 예측 결과(CSV)를 소프트 보팅 방식으로 앙상블하는 스크립트입니다.
-  - `inference.py`: 학습된 모델을 사용하여 테스트 데이터에 대한 추론을 실행하는 스크립트입니다.
-  - `modeling.py`: `SuperLossElectraForSequenceClassification`과 같은 사용자 정의 모델 정의를 포함합니다.
-  - `superloss.py`: SuperLoss 함수의 구현체입니다.
-  - `train.py`: 다양한 설정으로 모델을 학습시키기 위한 범용 스크립트입니다.
-  - `train_9000.py`: 랜덤 시드를 고정하지 않고 전체 데이터 9000개를 학습하기 위한 변형 스크립트입니다.
-  - `train_super_ada.py`: `3rd super_Ada.ipynb` 노트북에서 변환된 특정 학습 스크립트입니다.
-- **`.python-version`**: 프로젝트에서 사용하는 파이썬 버전 명시 파일입니다.
-- **`ko_README.md`**: 이 프로젝트에 대한 한국어 설명 파일입니다.
-- **`README.md`**: 이 프로젝트에 대한 영어 설명 파일입니다.
-- **`requirements.txt`**: Python 종속성 목록 파일입니다.
+## 실행 상태
 
-## 설정
-
-1.  **의존성 설치:**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2.  **학습 데이터 배치:**
-
-    `train.csv` 파일이 `data/` 디렉토리에 있는지 확인하세요.
-
-## 실행 방법
-
-### 1. 데이터 준비
-
-먼저 원본 데이터를 전처리해야 합니다. 이 스크립트는 `data/train.csv`를 읽고, 훈련 및 평가 세트로 분할한 다음, 텍스트를 토큰화하여 `processed_data/` 디렉토리에 결과를 저장합니다.
+별도 Python 환경에서 의존성을 설치합니다.
 
 ```bash
-python src/data_preparation.py \
-    --input_csv data/train.csv \
-    --output_dir processed_data \
-    --dataset_name tokenized_ds
+python -m pip install -r requirements.txt
 ```
 
-### 2. 학습
+일반 학습 경로에는 수정이 필요한 부분이 있습니다. 전처리는 `save_to_disk`로 저장하지만 학습은 `load_dataset`으로 읽고, validation split 이름도 전처리의 `eval`과 학습의 `test`가 다릅니다. 원래 실험 환경도 버전이 고정되어 있지 않습니다.
 
-데이터 준비가 완료되면 모델을 학습시킬 수 있습니다. `train.py` 스크립트는 범용 학습에 사용됩니다. `--use_superloss` 플래그를 추가하여 `SuperLoss`를 활성화할 수 있습니다.
+추론은 현재 **로컬 checkpoint 디렉터리**를 요구합니다. Hugging Face 모델 ID를 그대로 전달하면 경로 검사에서 거부됩니다. 가변 길이 입력의 batch 구성에도 알려진 문제가 있어, 전체 추론 실행을 검증한 상태는 아닙니다.
 
-**일반 학습:**
-
-```bash
-python src/train.py \
-    --output_dir models/my_electra_model \
-    --processed_data_path processed_data/tokenized_ds
-```
-
-**SuperLoss를 사용한 학습:**
-
-```bash
-python src/train.py \
-    --output_dir models/my_superloss_model \
-    --processed_data_path processed_data/tokenized_ds \
-    --use_superloss
-```
-
-또는 원본 노트북의 특정 학습 구성을 실행할 수 있습니다:
-
-```bash
-python src/train_super_ada.py
-```
-
-### 3. 추론
-
-학습 후 `inference.py` 스크립트를 사용하여 테스트 세트에 대한 예측을 생성할 수 있습니다. 로컬 모델 경로 또는 허깅페이스 모델 저장소 경로(예: `218jw/koelectra_9000_model`)를 제공해야 합니다.
-
-```bash
-python src/inference.py \
-    --checkpoint 218jw/koelectra_9000_model \
-    --test_csv data/test.csv \
-    --output submission
-```
-
-이 명령어는 루트 디렉토리에 `submission.csv` 파일을 생성합니다.
-
-### 4. 앙상블 (Ensemble)
-
-4개의 모델(Ada, Extra 등)에 대한 추론 결과(CSV)가 준비되었다면, `ensemble.py` 스크립트를 사용하여 예측 확률의 평균(Soft Voting)을 통해 앙상블을 수행할 수 있습니다.
+기존 예측 CSV는 다음과 같이 결합할 수 있습니다.
 
 ```bash
 python src/ensemble.py \
-    --csvs sub_ada.csv sub_extra.csv sub_42_4000.csv sub_9000.csv \
-    --output final_ensemble_submission.csv
+  --csvs sub_ada.csv sub_extra.csv sub_42_4000.csv sub_9000.csv \
+  --output final_ensemble_submission.csv
 ```
 
-성공적으로 완료되면 `final_ensemble_submission.csv` 파일이 생성됩니다.
+각 CSV는 행과 순서가 같고 `generated` 확률 열을 가져야 합니다.
+
+## 평가 시 주의할 점
+
+현재 전처리는 문서를 문단으로 나눈 뒤 분할하므로, 같은 문서의 문단이 학습과 validation 양쪽에 들어갈 수 있습니다. 따라서 이 validation을 새로운 문서에 대한 일반화 성능으로 해석하면 안 됩니다.
+
+대회 결과를 재현하려면 원래 데이터 분할, 학습된 모델, 최종 ensemble 구성, 평가 설정이 필요합니다. 공개 코드에는 이 기록이 모두 포함되어 있지 않습니다.
